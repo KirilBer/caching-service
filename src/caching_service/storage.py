@@ -58,47 +58,43 @@ class Store:
         Base.metadata.create_all(self.engine)
 
     def create(self, request: PayloadInput) -> str:
-        canonical = json.dumps(
-            [TRANSFORM_VERSION, request.list_1, request.list_2],
-            ensure_ascii=False,
-            separators=(",", ":"),
-        )
-        identifier = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
         with Session(self.engine) as session:
             # Lock before checking cache misses: separate workers must not both transform them.
             session.connection().exec_driver_sql("BEGIN IMMEDIATE")
             try:
-                payload = session.get(Payload, identifier)
-                if payload is None:
-                    sources = list(dict.fromkeys(request.list_1 + request.list_2))
-                    cached: dict[str, str] = {}
-                    # Stay below SQLite parameter limits for the maximum request size.
-                    for offset in range(0, len(sources), 400):
-                        records = session.scalars(
-                            select(Transformation).where(
-                                Transformation.version == TRANSFORM_VERSION,
-                                Transformation.source.in_(sources[offset : offset + 400]),
+                sources = list(dict.fromkeys(request.list_1 + request.list_2))
+                cached: dict[str, str] = {}
+                # Stay below SQLite parameter limits for the maximum request size.
+                for offset in range(0, len(sources), 400):
+                    records = session.scalars(
+                        select(Transformation).where(
+                            Transformation.version == TRANSFORM_VERSION,
+                            Transformation.source.in_(sources[offset : offset + 400]),
+                        )
+                    )
+                    cached.update({record.source: record.result for record in records})
+                for source in sources:
+                    if source not in cached:
+                        cached[source] = self.transformer(source)
+                        session.add(
+                            Transformation(
+                                version=TRANSFORM_VERSION,
+                                source=source,
+                                result=cached[source],
                             )
                         )
-                        cached.update({record.source: record.result for record in records})
-                    for source in sources:
-                        if source not in cached:
-                            cached[source] = self.transformer(source)
-                            session.add(
-                                Transformation(
-                                    version=TRANSFORM_VERSION,
-                                    source=source,
-                                    result=cached[source],
-                                )
-                            )
-                    output = ", ".join(
-                        cached[source]
-                        for pair in zip(request.list_1, request.list_2, strict=True)
-                        for source in pair
-                    )
-                    payload = Payload(id=identifier, output=output)
-                    session.add(payload)
-                output = payload.output
+                output = ", ".join(
+                    cached[source]
+                    for pair in zip(request.list_1, request.list_2, strict=True)
+                    for source in pair
+                )
+                # Content identity also deduplicates different inputs producing identical output.
+                canonical = json.dumps(
+                    [TRANSFORM_VERSION, output], ensure_ascii=False, separators=(",", ":")
+                )
+                identifier = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+                if session.get(Payload, identifier) is None:
+                    session.add(Payload(id=identifier, output=output))
                 session.commit()
             except Exception:
                 session.rollback()
@@ -119,6 +115,11 @@ class Store:
     def materialize(self, identifier: str, output: str) -> Path:
         destination = self.files_dir / f"{identifier}.json"
         content = PayloadOutput(output=output).model_dump_json()
+        try:
+            if destination.read_text(encoding="utf-8") == content:
+                return destination
+        except (FileNotFoundError, UnicodeDecodeError):
+            pass
         temporary: str | None = None
         try:
             with tempfile.NamedTemporaryFile(

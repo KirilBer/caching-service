@@ -5,7 +5,8 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import FastAPI, HTTPException, Path as ApiPath, Request
+from fastapi import FastAPI, HTTPException, Request
+from fastapi import Path as ApiPath
 from fastapi.responses import JSONResponse
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.exc import OperationalError
