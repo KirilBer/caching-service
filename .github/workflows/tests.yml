@@ -15,3 +15,17 @@ jobs:
       - run: uv run --frozen pytest -q
       - run: uv run --frozen ruff check .
       - run: uv run --frozen ruff format --check .
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t caching-service .
+      - run: docker run -d --name cache -p 127.0.0.1:8000:8000 caching-service
+      - name: Wait for startup and exercise the container CLI
+        run: |
+          curl --fail --silent --show-error --retry 10 --retry-connrefused --retry-delay 1 http://127.0.0.1:8000/docs > /dev/null
+          docker exec cache cache-cli --host http://127.0.0.1:8000 -r 3 -j '{"list_1":["a"],"list_2":["b"]}'
+      - name: Container logs
+        if: always()
+        run: docker logs cache || true

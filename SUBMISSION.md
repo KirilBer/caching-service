@@ -1,6 +1,6 @@
 # Submission checklist
 
-- Push this repository to a public GitHub or GitLab repository with a neutral name.
+- Public repository: https://github.com/KirilBer/caching-service
 - Preserve the commit history; do not squash.
 - Record an English screen-and-camera walkthrough, up to 15 minutes.
 - Replace the placeholders below with the real links and your actual time spent,
@@ -12,7 +12,7 @@ Hi,
 
 Here is my caching service submission:
 
-1. Repository: [PUBLIC REPOSITORY URL]
+1. Repository: https://github.com/KirilBer/caching-service
 2. Video walkthrough: [LOOM OR UNLISTED YOUTUBE URL]
 
 I spent approximately [ACTUAL NUMBER] hours on the task.
