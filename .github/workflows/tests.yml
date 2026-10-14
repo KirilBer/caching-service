@@ -24,7 +24,7 @@ jobs:
       - run: docker run -d --name cache -p 127.0.0.1:8000:8000 caching-service
       - name: Wait for startup and exercise the container CLI
         run: |
-          curl --fail --silent --show-error --retry 10 --retry-connrefused --retry-delay 1 http://127.0.0.1:8000/docs > /dev/null
+          curl --fail --silent --show-error --retry 10 --retry-all-errors --retry-delay 1 --max-time 5 --retry-max-time 30 http://127.0.0.1:8000/docs > /dev/null
           docker exec cache cache-cli --host http://127.0.0.1:8000 -r 3 -j '{"list_1":["a"],"list_2":["b"]}'
       - name: Container logs
         if: always()
